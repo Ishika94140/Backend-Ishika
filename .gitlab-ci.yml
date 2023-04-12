@@ -1,0 +1,32 @@
+# Stages
+stages:
+- docker
+- deploy
+# Jobs
+build_push_image:
+stage: docker
+image: docker:latest
+services:
+- docker:dind
+script:
+- docker login -u ccabricot -p cedric19012000
+- docker build -t ccabricot/nodejsdevops:latest .
+- docker push ccabricot/nodejsdevops:latest
+
+create_cluster:
+stage: deploy
+image: mcr.microsoft.com/azure-cli
+script:
+- az login --service-principal -u $CLIENT_ID -p $CLIENT_SECRET --tenant $TENANT_ID
+- az group create --name Rg-AKS-CHHUON --location westeurope
+- az aks create -g Rg-AKS -n myAKSCluster-CHHUON --node-count 2 --enable-addons monitoring --generate-ssh-keys
+deploy_to_cluster:
+stage: deploy
+needs: ["create_cluster"]
+image: mcr.microsoft.com/azure-cli
+script:
+- az login --service-principal -u $CLIENT_ID -p $CLIENT_SECRET --tenant $TENANT_ID
+- az aks get-credentials --resource-group Rg-AKS-CHHUON --name myAKSCluster-CHHUON
+- az aks install-cli
+- kubectl apply -f deployment.yml
+- kubectl apply -f service.yml
